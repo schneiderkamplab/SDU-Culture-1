@@ -1,12 +1,20 @@
 import pandas as pd
 import re
 from typing import Tuple
+import openai
+import asyncio
 
 def normalize_text(s: str) -> str:
     """Lower text and remove punctuation, articles and extra whitespace."""
     s = s.lower()
     s = re.sub(r"[^a-z0-9]+", " ", s)  # keep alphanumeric
     return s.strip()
+
+def normalize_entities(s: str) -> set:
+    """Split by commas/and and normalize names into a set."""
+    s = re.sub(r"\band\b", ",", s, flags=re.IGNORECASE)
+    parts = [normalize_text(x) for x in s.split(",")]
+    return {p.strip() for p in parts if p.strip()}
 
 def f1_score(prediction: str, ground_truth: str) -> float:
     """Compute token-level F1."""
@@ -27,10 +35,28 @@ def f1_score(prediction: str, ground_truth: str) -> float:
 def exact_match_score(prediction: str, ground_truth: str) -> float:
     """Check if normalized prediction exactly matches normalized ground truth."""
     return float(normalize_text(prediction) == normalize_text(ground_truth))
+    
+def set_match_score(prediction: str, ground_truth: str) -> float:
+    pred_set = normalize_entities(prediction)
+    gold_set = normalize_entities(ground_truth)
 
-def qa_score_single(pred: str, gold: str) -> Tuple[float, float]:
+    em = float(pred_set == gold_set)
+    
+    if not pred_set or not gold_set:
+        return em, float(pred_set == gold_set)
+    
+    common = pred_set & gold_set
+    precision = len(common) / len(pred_set)
+    recall = len(common) / len(gold_set)
+    f1 = 2 * precision * recall / (precision + recall) if common else 0.0
+    return em, f1
+
+def qa_score_single(pred: str, gold: str, set_based=False) -> Tuple[float, float]:
     """Return (EM, F1) for a single QA pair."""
-    return exact_match_score(pred, gold), f1_score(pred, gold)
+    if not set_based:
+        return exact_match_score(pred, gold), f1_score(pred, gold)
+    else:
+        return set_match_score(pred, gold)
 
 def evaluate_dataset(path: str, pred_col: str = "Prediction") -> dict:
     """Evaluate a CSV or Parquet file with columns Question, Answer, Prediction."""
@@ -53,3 +79,50 @@ def evaluate_dataset(path: str, pred_col: str = "Prediction") -> dict:
         "EM": sum(ems) / len(ems),
         "F1": sum(f1s) / len(f1s),
     }
+
+PROMPT_TEMPLATE = "Besvar spørgsmålet med kun det direkte svar, uden forklaring.\n\nSpørgsmål: {question}\nSvar:"
+async def get_prediction(client, model, question, expected, max_tokens=100, temperature=0.0):
+    prompt = PROMPT_TEMPLATE.format(question=question)
+    response = await client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=max_tokens,
+        temperature=temperature,
+    )
+    prediction = response["choices"][0]["message"]["content"].strip()
+
+    return {
+        "question": question,
+        "expected": expected,
+        "prediction": prediction,
+        "correct": prediction.lower() == expected.lower()
+    }
+
+async def run_evaluation(input_file: str, model:str, base_url: str, api_key: str, max_tokens=100, temperature=0.0) -> str:
+    client = openai.Client(base_url=base_url, api_key=api_key)
+
+    if input_file.endswith(".csv"):
+        df = pd.read_csv(input_file)
+    elif input_file.endswith(".parquet"):
+        df = pd.read_parquet(input_file)
+    
+    tasks = []
+    for row in df.itertuples():
+        print(f"Processing question: {row.Question}, expected: {row.Answer}")
+        tasks.append(
+            get_prediction(client=client, model=model, question=row.Question, expected=row.Answer, max_tokens=max_tokens, temperature=temperature)
+        )
+
+    responses = await asyncio.gather(*tasks, return_exceptions=True)
+    return responses
+
+    # # for i, response in enumerate(responses):
+    # #     if isinstance(response, dict):
+    # #         df.at[i, "Prediction"] = response["prediction"]
+    # #         df.at[i, "Correct"] = response["correct"]
+    # #     else:
+    # #         df.at[i, "Prediction"] = "Error"
+    # #         df.at[i, "Correct"] = False
+
+
+    # return responses

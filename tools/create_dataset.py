@@ -1,9 +1,8 @@
-from io import StringIO
 import os
-import pandas as pd
 import typer
-
+import pandas as pd
 app = typer.Typer()
+
 @app.command()
 def create(
     input_dir: str = typer.Argument(..., help="Directory to load from"),

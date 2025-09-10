@@ -11,6 +11,7 @@ The Canon highlights 108 works across literature, music, visual arts, architectu
 - **Cultural Relevance Test** – The Canon provides a well-defined cultural benchmark for evaluation.  
 - **Knowledge Probing** – Randomized prompts (Danish "*stikprøvekontrol*) test both relevant and less relevant associations with Canon works.
 - **Human Validation** – Every generated question/response pair is annotated for validation and relevance, even though we both want to main- and non-mainstream knowledge. 
+
 ---
 
 ## Methodology  
