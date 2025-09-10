@@ -1,4 +1,4 @@
-# SDU-Culture-1: Evaluating LLM Knowledge of Danish Culture  
+# 🇩🇰 SDU-Culture-1: Evaluating LLM Knowledge of Danish Culture  
 
 **SDU-Culture-1** is the first version of a dataset designed to **evaluate large language models’ understanding of Danish culture**, as defined by the official **Danish Culture Canon (Kulturkanon, 2006)**, defined by 756 closed question-answer pairs.  
 
