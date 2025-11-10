@@ -3,6 +3,7 @@ import re
 from typing import Tuple
 import openai
 import asyncio
+from tqdm import tqdm
 
 def normalize_text(s: str) -> str:
     """Lower text and remove punctuation, articles and extra whitespace."""
@@ -93,7 +94,7 @@ Regelsæt:
 
 async def get_prediction(client, model, question, expected, max_tokens=100, temperature=0.0):
     prompt = PROMPT_TEMPLATE.format(question=question)
-    response = client.chat.completions.create(
+    response = await client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": prompt}],
         max_tokens=max_tokens,
@@ -111,11 +112,11 @@ async def get_prediction(client, model, question, expected, max_tokens=100, temp
         "prediction": prediction,
     }
     if expected is not None:
-        res["correct"] = prediction.lower() == expected.lower()
+        result["correct"] = prediction.lower() == expected.lower()
     return result
 
 async def call_api(input_file: str, output_file: str, model:str, base_url: str, api_key: str, max_tokens=100, temperature=0.0, batch_size=20) -> str:
-    client = openai.Client(base_url=base_url, api_key=api_key)
+    client = openai.AsyncOpenAI(base_url=base_url, api_key=api_key)
 
     if input_file.endswith(".csv"):
         df = pd.read_csv(input_file, delimiter=";")
@@ -128,7 +129,7 @@ async def call_api(input_file: str, output_file: str, model:str, base_url: str, 
         print(f"Processing question: {row.Question}")
         expected = row.Answer if hasattr(row, 'Answer') else None
         tasks.append(
-            await get_prediction(client=client, model=model, question=row.Question, expected=expected, max_tokens=max_tokens, temperature=temperature)
+            get_prediction(client=client, model=model, question=row.Question, expected=expected, max_tokens=max_tokens, temperature=temperature)
         )
 
     for i in tqdm(range(0, len(tasks), batch_size), desc="Processing batches"):
