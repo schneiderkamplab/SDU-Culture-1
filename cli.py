@@ -14,7 +14,7 @@ def eval(
 @app.command()
 def run(
     input_file: str = typer.Argument("public/questions.csv", help="Path to input CSV or Parquet file"),
-    output_file: str = typer.Argument("predictions.csv", help="Path to output CSV file for predictions"),
+    output_file: str = typer.Argument(None, help="Path to output CSV file for predictions"),
     model: str = typer.Option(..., help="Model name to use for predictions"),
     base_url: str = typer.Option("http://localhost:8000/v1", help="Base URL for the OpenAI API"),
     api_key: str = typer.Option("", help="API key for the OpenAI API"),
