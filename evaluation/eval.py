@@ -59,6 +59,14 @@ def qa_score_single(pred: str, gold: str, set_based=False) -> Tuple[float, float
     else:
         return set_match_score(pred, gold)
 
+def bleu_score(prediction: str, ground_truth: str) -> float:
+    """Compute BLEU score for single prediction and ground truth."""
+    from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+    pred_tokens = normalize_text(prediction).split()
+    gold_tokens = normalize_text(ground_truth).split()
+    smoothie = SmoothingFunction().method4
+    return sentence_bleu([gold_tokens], pred_tokens, smoothing_function=smoothie)
+
 def evaluate_dataset(path: str, gold_path: str, pred_col: str = "Answer") -> dict:
     """Evaluate a CSV or Parquet file with columns Question, Answer, Prediction."""
     if path.endswith(".csv"):
@@ -70,18 +78,21 @@ def evaluate_dataset(path: str, gold_path: str, pred_col: str = "Answer") -> dic
     else:
         raise ValueError("File must be .csv or .parquet")
 
-    ems, f1s = [], []
+    ems, f1s, bleus = [], [], []
 
     for (_, row), (_, gold_row) in zip(df.iterrows(), gold_df.iterrows()):
         gold = str(gold_row["Answer"])
         pred = str(row[pred_col])
         em, f1 = qa_score_single(pred, gold)
+        bleu_score = bleu_score(pred, gold)
         ems.append(em)
         f1s.append(f1)
+        bleus.append(bleu_score)
 
     return {
         "EM": sum(ems) / len(ems),
         "F1": sum(f1s) / len(f1s),
+        "BLEU": sum(bleus) / len(bleus),
     }
 
 PROMPT_TEMPLATE = """
@@ -133,6 +144,9 @@ async def call_api(input_file: str, output_file: str, model:str, base_url: str, 
             get_prediction(client=client, model=model, identifier=row.id, question=row.Question, expected=expected, max_tokens=max_tokens, temperature=temperature)
         )
 
+    if not output_file:
+        output_file = model.replace("/", "-") + "-predictions.csv"
+    
     with open(output_file, "w") as f:
         f.write("id;Answer\n")
 
