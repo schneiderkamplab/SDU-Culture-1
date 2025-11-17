@@ -1,6 +1,6 @@
-# 🇩🇰 SDU-Culture-1: Evaluating LLM Knowledge of Danish Culture  
+# SDUs Daisy: A Benchmark for Danish Culture 
 <p align="center">
-  <img src="docs/daisy_logo.png" alt="Description" width="200"/>
+  <img src="docs/daisy_logo.png" alt="Description" width="250"/>
 </p>
 
 
