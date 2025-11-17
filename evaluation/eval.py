@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import re
 from typing import Tuple
@@ -115,8 +116,12 @@ async def get_prediction(client, model, identifier, question, expected, max_toke
         max_tokens=max_tokens,
         temperature=temperature,
     )
-    print("response:", response)
-    prediction = response.choices[0].message.content.strip()
+    if response is None or response.choices is None or response.choices[0].message.content is None:
+        print(f"Question {identifier}: Response is None")
+        prediction = None
+    else:
+        print(response)
+        prediction = response.choices[0].message.content.strip().replace("\n", " ")
 
     result = {
         "id": identifier,
@@ -128,7 +133,7 @@ async def get_prediction(client, model, identifier, question, expected, max_toke
         result["correct"] = prediction.lower() == expected.lower()
     return result
 
-async def call_api(input_file: str, output_file: str, model:str, base_url: str, api_key: str, max_tokens=100, temperature=0.0, batch_size=20) -> str:
+async def call_api(input_file: str, output_file: str, model:str, base_url: str, api_key: str, max_tokens=100, temperature=0.0, batch_size=20, flush=False) -> str:
     client = openai.AsyncOpenAI(base_url=base_url, api_key=api_key)
 
     if input_file.endswith(".csv"):
@@ -138,12 +143,19 @@ async def call_api(input_file: str, output_file: str, model:str, base_url: str, 
     
     tasks = []
     results = []
+    print("Creating tasks...")
     for row in df.itertuples():
         print(f"Processing question: {row.Question}")
         expected = row.Answer if hasattr(row, 'Answer') else None
         tasks.append(
             get_prediction(client=client, model=model, identifier=row.id, question=row.Question, expected=expected, max_tokens=max_tokens, temperature=temperature)
         )
+    print(f"Total questions to process: {len(df)}")
+
+    if output_file is None:
+        output_file = model.replace("/", "-") + "-predictions.csv"
+        print(output_file)
+    print(f"Writing predictions to {output_file}")
 
     if not output_file:
         output_file = model.replace("/", "-") + "-predictions.csv"
@@ -157,10 +169,13 @@ async def call_api(input_file: str, output_file: str, model:str, base_url: str, 
             results.extend(batch_responses)
     
             for i, response in enumerate(batch_responses):
-                if isinstance(response, dict):
-                    f.write(f"{response['id']};{response['prediction']}\n")
+                if response['prediction'] is None:
+                    f.write(f"{response['id']};Error\n")
                 else:
-                    f.write(f"{i};Error\n")
+                    f.write(f"{response['id']};{response['prediction']}\n")
+
+            if flush:  
+                f.flush()
 
 def run_eval(input_file: str, output_file: str, model:str, base_url: str, api_key: str, max_tokens=100, temperature=0.0):
     responses = asyncio.run(
